@@ -1,0 +1,29 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      PORT: ${PORT:-3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY}
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../salon-estudio-frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+    restart: unless-stopped
