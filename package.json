@@ -1,5 +1,5 @@
 {
-  "name": "salon-estudio-api",
+  "name": "salon-estudio-backend",
   "version": "1.0.0",
   "description": "API base para el Salón de Estudio Colaborativo en Tiempo Real (Sprint 0 - TS-00)",
   "main": "dist/server.js",

@@ -1,4 +1,4 @@
-# Salón de Estudio Colaborativo en Tiempo Real — API (`salon-estudio-api`)
+# Salón de Estudio Colaborativo en Tiempo Real — API (`salon-estudio-backend`)
 
 API REST en **Node.js + TypeScript + Express** conectada a **Cloud Firestore** (Firebase Admin SDK) y documentada con **Swagger** (`/docs`).
 
