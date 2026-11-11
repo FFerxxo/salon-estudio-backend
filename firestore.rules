@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// El frontend nunca lee ni escribe Firestore directamente: todo pasa por la API,
+// que usa Firebase Admin SDK (Admin no está sujeto a estas reglas).
+// Por eso se niega cualquier acceso directo desde el navegador.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
