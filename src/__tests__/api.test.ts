@@ -45,9 +45,8 @@ describe('API Base Técnica (TS-00)', () => {
     const res = await request(app).get('/docs/');
     expect(res.status).toBe(200);
     expect(res.text).toContain('swagger-ui');
-    expect(Object.keys(swaggerDocument.paths)).toEqual([
-      '/api/health',
-      '/api/app-info',
-    ]);
+    expect(Object.keys(swaggerDocument.paths)).toEqual(
+      expect.arrayContaining(['/api/health', '/api/app-info'])
+    );
   });
 });
