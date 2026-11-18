@@ -122,3 +122,18 @@ userRouter.patch('/me', requireAuth, async (req: Request, res: Response) => {
     res.status(503).json({ error: ERROR_BD });
   }
 });
+
+/**
+ * Privado (US-05): elimina la cuenta propia. Borra las salas del usuario y sus mensajes,
+ * el perfil, la reserva del nombre de usuario (queda libre) y la cuenta de Firebase Authentication.
+ */
+userRouter.delete('/me', requireAuth, async (_req: Request, res: Response) => {
+  const usuario = res.locals.usuario as UsuarioAutenticado;
+
+  try {
+    const { salasEliminadas } = await userService.eliminarCuenta(usuario);
+    res.status(200).json({ mensaje: 'Tu cuenta fue eliminada.', salasEliminadas });
+  } catch {
+    res.status(503).json({ error: 'No se pudo eliminar tu cuenta. Intenta de nuevo.' });
+  }
+});

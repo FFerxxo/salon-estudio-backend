@@ -45,3 +45,43 @@ describe('US-04 · userRepository.actualizarPerfil (transacción en Firestore)',
     expect(fake.db.datos.get('users/uid-ana')?.username).toBe('Ana_Perez');
   });
 });
+
+describe('US-05 · userRepository.eliminarDatos', () => {
+  beforeEach(async () => {
+    fake.db = new FakeFirestore();
+    await userRepository.crearPerfil({ ...base, uid: 'uid-ana', username: 'ana_perez' });
+    await userRepository.crearPerfil({ ...base, uid: 'uid-luis', username: 'luis_g' });
+    fake.db.datos.set('rooms/SALA0001', { nombre: 'Cálculo', anfitrionUid: 'uid-ana' });
+    fake.db.datos.set('rooms/SALA0001/messages/m1', { texto: 'hola', autorUid: 'uid-luis' });
+    fake.db.datos.set('rooms/SALA0002', { nombre: 'Física', anfitrionUid: 'uid-luis' });
+  });
+
+  it('borra perfil, nombre de usuario y salas propias con sus mensajes', async () => {
+    const r = await userRepository.eliminarDatos('uid-ana');
+
+    expect(r.salasEliminadas).toBe(1);
+    expect(fake.db.datos.has('users/uid-ana')).toBe(false);
+    expect(fake.db.datos.has('usernames/ana_perez')).toBe(false);
+    expect(fake.db.datos.has('rooms/SALA0001')).toBe(false);
+    expect(fake.db.datos.has('rooms/SALA0001/messages/m1')).toBe(false);
+  });
+
+  it('no toca los datos ni las salas de otras personas', async () => {
+    await userRepository.eliminarDatos('uid-ana');
+
+    expect(fake.db.datos.has('users/uid-luis')).toBe(true);
+    expect(fake.db.datos.get('usernames/luis_g')).toEqual({ uid: 'uid-luis' });
+    expect(fake.db.datos.has('rooms/SALA0002')).toBe(true);
+  });
+
+  it('el nombre de usuario queda libre para otra persona', async () => {
+    await userRepository.eliminarDatos('uid-ana');
+    expect(await userRepository.usernameDisponible('ana_perez')).toBe(true);
+  });
+
+  it('funciona aunque la cuenta no tenga perfil (entró con Google y no terminó)', async () => {
+    await expect(userRepository.eliminarDatos('uid-sin-perfil')).resolves.toEqual({
+      salasEliminadas: 0,
+    });
+  });
+});

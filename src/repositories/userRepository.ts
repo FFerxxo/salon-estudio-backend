@@ -107,4 +107,34 @@ export const userRepository = {
       return actualizado;
     });
   },
+
+  /**
+   * Borra en Firestore todo lo del usuario (US-05):
+   * 1. Sus salas (rooms donde es anfitrión) con sus mensajes.
+   * 2. Su perfil (users/{uid}) y la reserva de su nombre de usuario (usernames), en una transacción.
+   * Devuelve cuántas salas se borraron. Si no tenía perfil, igual borra lo demás.
+   */
+  async eliminarDatos(uid: string): Promise<{ salasEliminadas: number }> {
+    const db = getDb();
+
+    const salas = await db.collection('rooms').where('anfitrionUid', '==', uid).get();
+    for (const sala of salas.docs) {
+      await db.recursiveDelete(sala.ref);
+    }
+
+    const userRef = db.collection('users').doc(uid);
+    await db.runTransaction(async (tx) => {
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists) return;
+
+      const { username } = userSnap.data() as PerfilUsuario;
+      const usernameRef = db.collection('usernames').doc(username.toLowerCase());
+      const usernameSnap = await tx.get(usernameRef);
+
+      if (usernameSnap.exists && usernameSnap.data()?.uid === uid) tx.delete(usernameRef);
+      tx.delete(userRef);
+    });
+
+    return { salasEliminadas: salas.size };
+  },
 };

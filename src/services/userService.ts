@@ -58,4 +58,15 @@ export const userService = {
       throw error;
     }
   },
+
+  /**
+   * Elimina la cuenta del usuario que inició sesión (US-05).
+   * Primero Firestore (salas, perfil y nombre de usuario) y al final Firebase Authentication.
+   * Si algo falla a mitad, se puede volver a llamar: cada paso tolera que ya esté hecho.
+   */
+  async eliminarCuenta(usuario: UsuarioAutenticado): Promise<{ salasEliminadas: number }> {
+    const resultado = await userRepository.eliminarDatos(usuario.uid);
+    await authRepository.eliminarCuenta(usuario.uid);
+    return resultado;
+  },
 };
