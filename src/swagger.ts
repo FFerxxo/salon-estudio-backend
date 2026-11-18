@@ -27,6 +27,57 @@ const respuesta401 = {
   },
 };
 
+const salaSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', example: 'K7PQ2XMB', description: 'ID único de 8 caracteres para compartir' },
+    nombre: { type: 'string', example: 'Cálculo II — parcial 2' },
+    ambiente: { type: 'string', enum: ['ninguno', 'blue', 'green'] },
+    anfitrionUid: { type: 'string', example: 'q1w2e3r4t5' },
+    anfitrionUsername: { type: 'string', example: 'ana_perez' },
+    creadaEn: { type: 'string', format: 'date-time' },
+    actualizadaEn: { type: 'string', format: 'date-time' },
+  },
+};
+
+const respuestaPerfilIncompleto = {
+  description: 'La cuenta aún no tiene perfil (no ha elegido nombre de usuario)',
+  content: {
+    'application/json': {
+      example: { error: 'Aún no has elegido tu nombre de usuario.', codigo: 'PERFIL_INCOMPLETO' },
+    },
+  },
+};
+
+const respuestaSalaNoExiste = {
+  description: 'No existe una sala con ese ID',
+  content: {
+    'application/json': {
+      example: {
+        error: 'No encontramos una sala con ese ID. Revisa que esté bien escrito.',
+        codigo: 'SALA_NO_ENCONTRADA',
+      },
+    },
+  },
+};
+
+const respuestaNoAnfitrion = {
+  description: 'La sala es de otra persona: solo su anfitrión la puede cambiar o eliminar',
+  content: {
+    'application/json': {
+      example: { error: 'Solo quien creó la sala puede cambiarla o eliminarla.' },
+    },
+  },
+};
+
+const parametroIdSala = {
+  name: 'id',
+  in: 'path',
+  required: true,
+  schema: { type: 'string', example: 'K7PQ2XMB' },
+  description: '8 letras o números. No distingue mayúsculas.',
+};
+
 const respuesta503 = {
   description: 'Error al consultar Firestore',
   content: { 'application/json': { schema: errorSchema } },
@@ -36,9 +87,9 @@ export const swaggerDocument = {
   openapi: '3.0.3',
   info: {
     title: 'Salón de Estudio Colaborativo en Tiempo Real — API',
-    version: '1.1.0',
+    version: '1.2.0',
     description:
-      'Sprint 0 (TS-00) y Sprint 1 (TS-01). Las rutas privadas piden el ID token de Firebase ' +
+      'Sprint 0 (TS-00), Sprint 1 (TS-01) y Sprint 2 (US-04, US-05, US-06). Las rutas privadas piden el ID token de Firebase ' +
       'en el encabezado `Authorization: Bearer <token>`. Para probarlas aquí, pulsa **Authorize** y pega el token.',
   },
   components: {
@@ -101,6 +152,216 @@ export const swaggerDocument = {
               },
             },
           },
+          '503': respuesta503,
+        },
+      },
+      patch: {
+        summary: 'Edita el perfil propio (US-04)',
+        description:
+          'Solo cambia los campos enviados. Siempre edita el perfil del token, nunca el de otra persona. ' +
+          'El nombre de usuario y el correo se validan en el servidor para que no estén repetidos (409). ' +
+          'El correo solo se puede cambiar en cuentas de correo y contraseña; si cambia, se actualiza también ' +
+          'en Firebase Authentication (el frontend debe renovar el token con getIdToken(true)).',
+        tags: ['Usuarios (US-04, US-05)'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  nombres: { type: 'string', maxLength: 50, example: 'Ana María' },
+                  apellidos: { type: 'string', maxLength: 50, example: 'Pérez Gómez' },
+                  username: { type: 'string', pattern: '^[A-Za-z0-9_]{3,20}$', example: 'ana_maria' },
+                  email: { type: 'string', format: 'email', example: 'ana.maria@correo.com' },
+                  avatarUrl: { type: 'string', nullable: true, example: 'https://ejemplo.com/avatar.png' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Perfil actualizado',
+            content: { 'application/json': { schema: perfilSchema } },
+          },
+          '400': {
+            description: 'Datos inválidos (un mensaje por campo), sin cambios, o correo de una cuenta de Google',
+            content: {
+              'application/json': {
+                example: {
+                  error: 'Revisa los campos marcados.',
+                  errores: { email: 'Escribe un correo válido, por ejemplo nombre@correo.com.' },
+                },
+              },
+            },
+          },
+          '401': respuesta401,
+          '404': respuestaPerfilIncompleto,
+          '409': {
+            description: 'El nombre de usuario o el correo ya los usa otra persona',
+            content: {
+              'application/json': {
+                example: {
+                  error: 'Ese correo ya está registrado en otra cuenta.',
+                  errores: { email: 'Ese correo ya está registrado en otra cuenta.' },
+                },
+              },
+            },
+          },
+          '503': respuesta503,
+        },
+      },
+      delete: {
+        summary: 'Elimina la cuenta propia (US-05)',
+        description:
+          'Política de eliminación: se borran las salas de la persona (con sus mensajes), su perfil ' +
+          '(users/{uid}), la reserva de su nombre de usuario (queda libre para otros) y su cuenta de ' +
+          'Firebase Authentication. Los mensajes que escribió en salas de otras personas se conservan para ' +
+          'no romper esas conversaciones. Se puede repetir sin error si algo falló a mitad.',
+        tags: ['Usuarios (US-04, US-05)'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': {
+            description: 'Cuenta eliminada',
+            content: {
+              'application/json': {
+                example: { mensaje: 'Tu cuenta fue eliminada.', salasEliminadas: 2 },
+              },
+            },
+          },
+          '401': respuesta401,
+          '503': {
+            description: 'No se pudo eliminar (la cuenta de Authentication no se borra si Firestore falla)',
+            content: {
+              'application/json': {
+                example: { error: 'No se pudo eliminar tu cuenta. Intenta de nuevo.' },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/salas': {
+      post: {
+        summary: 'Crea una sala con el usuario del token como anfitrión (US-06)',
+        tags: ['Salas (US-06)'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['nombre'],
+                properties: {
+                  nombre: { type: 'string', minLength: 3, maxLength: 50, example: 'Cálculo II — parcial 2' },
+                  ambiente: {
+                    type: 'string',
+                    enum: ['ninguno', 'blue', 'green'],
+                    default: 'ninguno',
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'Sala creada con un ID único',
+            content: { 'application/json': { schema: salaSchema } },
+          },
+          '400': {
+            description: 'Datos inválidos: un mensaje por campo',
+            content: {
+              'application/json': {
+                example: {
+                  error: 'Revisa los campos marcados.',
+                  errores: { nombre: 'El nombre de la sala debe tener entre 3 y 50 caracteres.' },
+                },
+              },
+            },
+          },
+          '401': respuesta401,
+          '404': respuestaPerfilIncompleto,
+          '503': respuesta503,
+        },
+      },
+    },
+    '/api/salas/mias': {
+      get: {
+        summary: 'Salas donde el usuario es anfitrión, la más reciente primero (US-06)',
+        tags: ['Salas (US-06)'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': {
+            description: 'Lista de salas (vacía si no tiene)',
+            content: {
+              'application/json': {
+                schema: { type: 'object', properties: { salas: { type: 'array', items: salaSchema } } },
+              },
+            },
+          },
+          '401': respuesta401,
+          '503': respuesta503,
+        },
+      },
+    },
+    '/api/salas/{id}': {
+      get: {
+        summary: 'Datos de una sala por su ID',
+        tags: ['Salas (US-06)'],
+        security: [{ bearerAuth: [] }],
+        parameters: [parametroIdSala],
+        responses: {
+          '200': { description: 'Sala encontrada', content: { 'application/json': { schema: salaSchema } } },
+          '401': respuesta401,
+          '404': respuestaSalaNoExiste,
+          '503': respuesta503,
+        },
+      },
+      patch: {
+        summary: 'Edita nombre o ambiente de la sala (solo el anfitrión)',
+        tags: ['Salas (US-06)'],
+        security: [{ bearerAuth: [] }],
+        parameters: [parametroIdSala],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  nombre: { type: 'string', minLength: 3, maxLength: 50 },
+                  ambiente: { type: 'string', enum: ['ninguno', 'blue', 'green'] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Sala actualizada', content: { 'application/json': { schema: salaSchema } } },
+          '400': { description: 'Datos inválidos o sin cambios', content: { 'application/json': { schema: errorSchema } } },
+          '401': respuesta401,
+          '403': respuestaNoAnfitrion,
+          '404': respuestaSalaNoExiste,
+          '503': respuesta503,
+        },
+      },
+      delete: {
+        summary: 'Elimina la sala y sus mensajes (solo el anfitrión)',
+        tags: ['Salas (US-06)'],
+        security: [{ bearerAuth: [] }],
+        parameters: [parametroIdSala],
+        responses: {
+          '200': {
+            description: 'Sala eliminada',
+            content: { 'application/json': { example: { mensaje: 'La sala fue eliminada.' } } },
+          },
+          '401': respuesta401,
+          '403': respuestaNoAnfitrion,
+          '404': respuestaSalaNoExiste,
           '503': respuesta503,
         },
       },

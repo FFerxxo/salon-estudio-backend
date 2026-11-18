@@ -228,3 +228,16 @@ describe('Permisos: solo el anfitrión cambia o elimina su sala', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('Sprint 2 · Swagger', () => {
+  it('documenta los endpoints nuevos de perfil y salas', async () => {
+    const { swaggerDocument } = await import('../swagger');
+    const paths = swaggerDocument.paths as Record<string, Record<string, unknown>>;
+    expect(Object.keys(paths['/api/usuarios/me'])).toEqual(
+      expect.arrayContaining(['get', 'patch', 'delete'])
+    );
+    expect(paths['/api/salas'].post).toBeDefined();
+    expect(paths['/api/salas/mias'].get).toBeDefined();
+    expect(Object.keys(paths['/api/salas/{id}'])).toEqual(['get', 'patch', 'delete']);
+  });
+});

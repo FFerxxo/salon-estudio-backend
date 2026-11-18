@@ -1,19 +1,36 @@
+# Levanta todo el sistema: frontend, API y servidor de tiempo real.
+# La API y el tiempo real están en este repositorio (raíz y carpeta realtime/);
+# el frontend se clona al lado:
+#   salon-estudio-backend/    (este: API + realtime/)
+#   salon-estudio-frontend/
+# Las claves se leen de .env (copiar .env.example); nunca se suben al repositorio.
 services:
   api:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "${PORT:-3000}:3000"
+      - "3000:3000"
     environment:
-      PORT: ${PORT:-3000}
+      PORT: 3000
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
       FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
       FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY}
-    env_file:
-      - path: .env
-        required: false
+    restart: unless-stopped
+
+  realtime:
+    build:
+      context: ./realtime
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY}
     restart: unless-stopped
 
   frontend:
@@ -26,4 +43,5 @@ services:
       - "5173:80"
     depends_on:
       - api
+      - realtime
     restart: unless-stopped
