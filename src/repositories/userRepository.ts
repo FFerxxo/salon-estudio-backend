@@ -9,6 +9,18 @@ export interface PerfilUsuario {
   avatarUrl: string | null;
   proveedor: string;
   creadoEn: string;
+  actualizadoEn?: string;
+}
+
+/** Campos que el usuario puede cambiar con PATCH /api/usuarios/me. */
+export type CambiosPerfil = Partial<
+  Pick<PerfilUsuario, 'nombres' | 'apellidos' | 'username' | 'email' | 'avatarUrl'>
+>;
+
+export class PerfilNoEncontradoError extends Error {
+  constructor() {
+    super('Profile not found');
+  }
 }
 
 export class UsernameOcupadoError extends Error {
@@ -58,5 +70,41 @@ export const userRepository = {
     });
 
     return perfil;
+  },
+
+  /**
+   * Actualiza el perfil. Si cambia el nombre de usuario, en la MISMA transacción
+   * reserva el nuevo y libera el anterior, así nunca quedan dos personas con el mismo.
+   */
+  async actualizarPerfil(uid: string, cambios: CambiosPerfil): Promise<PerfilUsuario> {
+    const db = getDb();
+    const userRef = db.collection('users').doc(uid);
+
+    return db.runTransaction(async (tx) => {
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists) throw new PerfilNoEncontradoError();
+      const actual = userSnap.data() as PerfilUsuario;
+
+      const nuevoUsername = cambios.username;
+      const cambiaReserva =
+        nuevoUsername !== undefined && nuevoUsername.toLowerCase() !== actual.username.toLowerCase();
+
+      if (cambiaReserva) {
+        const nuevoRef = db.collection('usernames').doc(nuevoUsername.toLowerCase());
+        const nuevoSnap = await tx.get(nuevoRef);
+        if (nuevoSnap.exists && nuevoSnap.data()?.uid !== uid) throw new UsernameOcupadoError();
+
+        tx.delete(db.collection('usernames').doc(actual.username.toLowerCase()));
+        tx.set(nuevoRef, { uid });
+      }
+
+      const actualizado: PerfilUsuario = {
+        ...actual,
+        ...cambios,
+        actualizadoEn: new Date().toISOString(),
+      };
+      tx.set(userRef, actualizado);
+      return actualizado;
+    });
   },
 };
