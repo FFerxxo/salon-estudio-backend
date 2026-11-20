@@ -1,0 +1,15 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+coverage
+.git
+.gitignore
+README.md
+src/__tests__
+src/**/*.test.ts
+vitest.config.ts
+eslint.config.mjs
