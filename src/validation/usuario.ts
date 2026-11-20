@@ -34,19 +34,39 @@ function validarNombre(valor: unknown, campo: string): string | null {
   return null;
 }
 
+/** Avatares que ofrece el selector del front (mismos de AvatarPicker). */
+export const AVATARES_EMOJI = ['🚀', '🎧', '⚡', '🦉'] as const;
+
+const MENSAJE_AVATAR = 'Elige uno de los avatares o usa un enlace que empiece por https://';
+
+/** Quita el selector de variación (U+FE0F) para comparar emojis como ⚡ y ⚡️. */
+function normalizarEmoji(valor: string): string {
+  return valor.trim().replace(/\uFE0F/g, '');
+}
+
+/** Devuelve el emoji del selector si coincide, o null. */
+export function emojiDeAvatar(valor: unknown): string | null {
+  if (typeof valor !== 'string') return null;
+  const limpio = normalizarEmoji(valor);
+  return AVATARES_EMOJI.find((emoji) => normalizarEmoji(emoji) === limpio) ?? null;
+}
+
 function validarAvatar(valor: unknown): string | null {
   if (valor === undefined || valor === null || valor === '') return null;
-  if (typeof valor !== 'string' || valor.length > 500) {
-    return 'El avatar debe ser un enlace válido que empiece por https://';
-  }
+  if (emojiDeAvatar(valor)) return null;
+  if (typeof valor !== 'string' || valor.length > 500) return MENSAJE_AVATAR;
   try {
     const url = new URL(valor);
-    return url.protocol === 'https:'
-      ? null
-      : 'El avatar debe ser un enlace válido que empiece por https://';
+    return url.protocol === 'https:' ? null : MENSAJE_AVATAR;
   } catch {
-    return 'El avatar debe ser un enlace válido que empiece por https://';
+    return MENSAJE_AVATAR;
   }
+}
+
+/** Guarda el emoji en su forma del selector o el enlace tal cual. */
+function avatarAGuardar(valor: unknown): string | null {
+  if (valor === undefined || valor === null || valor === '') return null;
+  return emojiDeAvatar(valor) ?? (valor as string);
 }
 
 /** Valida en el servidor los datos para crear un perfil (no basta con validar en la pantalla). */
@@ -76,7 +96,7 @@ export function validarPerfil(body: unknown): ResultadoValidacion {
       nombres: (datos.nombres as string).trim(),
       apellidos: (datos.apellidos as string).trim(),
       username: (datos.username as string).trim(),
-      avatarUrl: (datos.avatarUrl as string | undefined) || null,
+      avatarUrl: avatarAGuardar(datos.avatarUrl),
     },
   };
 }
@@ -154,7 +174,7 @@ export function validarEdicion(body: unknown, proveedor: string): ResultadoEdici
   if (entrada.avatarUrl !== undefined) {
     const e = validarAvatar(entrada.avatarUrl);
     if (e) errores.avatarUrl = e;
-    else datos.avatarUrl = (entrada.avatarUrl as string | null) || null;
+    else datos.avatarUrl = avatarAGuardar(entrada.avatarUrl);
   }
 
   if (Object.keys(errores).length > 0) return { ok: false, errores };

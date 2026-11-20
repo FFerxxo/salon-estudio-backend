@@ -60,6 +60,27 @@ describe('US-04 · PATCH /api/usuarios/me (editar perfil)', () => {
     expect(actualizar).toHaveBeenCalledWith('uid-ana', { nombres: 'Ana María' });
   });
 
+  it('guarda el avatar elegido en el selector (emoji) y rechaza emojis fuera de la lista', async () => {
+    conSesion();
+    vi.spyOn(userRepository, 'getPerfil').mockResolvedValue(perfilAna);
+    const actualizar = vi
+      .spyOn(userRepository, 'actualizarPerfil')
+      .mockImplementation(async (_uid, cambios) => ({ ...perfilAna, ...cambios }));
+
+    const ok = await patch({ avatarUrl: '🦉' });
+    expect(ok.status).toBe(200);
+    expect(ok.body.avatarUrl).toBe('🦉');
+    expect(actualizar).toHaveBeenCalledWith('uid-ana', { avatarUrl: '🦉' });
+
+    const rayo = await patch({ avatarUrl: '⚡\uFE0F' });
+    expect(rayo.status).toBe(200);
+    expect(actualizar).toHaveBeenLastCalledWith('uid-ana', { avatarUrl: '⚡' });
+
+    const fuera = await patch({ avatarUrl: '🍕' });
+    expect(fuera.status).toBe(400);
+    expect(fuera.body.errores.avatarUrl).toBeDefined();
+  });
+
   it('siempre edita el perfil del token, aunque el cuerpo traiga otro uid', async () => {
     conSesion();
     vi.spyOn(userRepository, 'getPerfil').mockResolvedValue(perfilAna);
