@@ -9,6 +9,18 @@ export interface PerfilUsuario {
   avatarUrl: string | null;
   proveedor: string;
   creadoEn: string;
+  actualizadoEn?: string;
+}
+
+/** Campos que el usuario puede cambiar con PATCH /api/usuarios/me. */
+export type CambiosPerfil = Partial<
+  Pick<PerfilUsuario, 'nombres' | 'apellidos' | 'username' | 'email' | 'avatarUrl'>
+>;
+
+export class PerfilNoEncontradoError extends Error {
+  constructor() {
+    super('Profile not found');
+  }
 }
 
 export class UsernameOcupadoError extends Error {
@@ -58,5 +70,71 @@ export const userRepository = {
     });
 
     return perfil;
+  },
+
+  /**
+   * Actualiza el perfil. Si cambia el nombre de usuario, en la MISMA transacción
+   * reserva el nuevo y libera el anterior, así nunca quedan dos personas con el mismo.
+   */
+  async actualizarPerfil(uid: string, cambios: CambiosPerfil): Promise<PerfilUsuario> {
+    const db = getDb();
+    const userRef = db.collection('users').doc(uid);
+
+    return db.runTransaction(async (tx) => {
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists) throw new PerfilNoEncontradoError();
+      const actual = userSnap.data() as PerfilUsuario;
+
+      const nuevoUsername = cambios.username;
+      const cambiaReserva =
+        nuevoUsername !== undefined && nuevoUsername.toLowerCase() !== actual.username.toLowerCase();
+
+      if (cambiaReserva) {
+        const nuevoRef = db.collection('usernames').doc(nuevoUsername.toLowerCase());
+        const nuevoSnap = await tx.get(nuevoRef);
+        if (nuevoSnap.exists && nuevoSnap.data()?.uid !== uid) throw new UsernameOcupadoError();
+
+        tx.delete(db.collection('usernames').doc(actual.username.toLowerCase()));
+        tx.set(nuevoRef, { uid });
+      }
+
+      const actualizado: PerfilUsuario = {
+        ...actual,
+        ...cambios,
+        actualizadoEn: new Date().toISOString(),
+      };
+      tx.set(userRef, actualizado);
+      return actualizado;
+    });
+  },
+
+  /**
+   * Borra en Firestore todo lo del usuario (US-05):
+   * 1. Sus salas (rooms donde es anfitrión) con sus mensajes.
+   * 2. Su perfil (users/{uid}) y la reserva de su nombre de usuario (usernames), en una transacción.
+   * Devuelve cuántas salas se borraron. Si no tenía perfil, igual borra lo demás.
+   */
+  async eliminarDatos(uid: string): Promise<{ salasEliminadas: number }> {
+    const db = getDb();
+
+    const salas = await db.collection('rooms').where('anfitrionUid', '==', uid).get();
+    for (const sala of salas.docs) {
+      await db.recursiveDelete(sala.ref);
+    }
+
+    const userRef = db.collection('users').doc(uid);
+    await db.runTransaction(async (tx) => {
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists) return;
+
+      const { username } = userSnap.data() as PerfilUsuario;
+      const usernameRef = db.collection('usernames').doc(username.toLowerCase());
+      const usernameSnap = await tx.get(usernameRef);
+
+      if (usernameSnap.exists && usernameSnap.data()?.uid === uid) tx.delete(usernameRef);
+      tx.delete(userRef);
+    });
+
+    return { salasEliminadas: salas.size };
   },
 };

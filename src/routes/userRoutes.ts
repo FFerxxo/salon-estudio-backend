@@ -1,13 +1,23 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth, UsuarioAutenticado } from '../middleware/auth';
-import { PerfilExistenteError, UsernameOcupadoError } from '../repositories/userRepository';
+import { CorreoOcupadoError } from '../repositories/authRepository';
+import {
+  PerfilExistenteError,
+  PerfilNoEncontradoError,
+  UsernameOcupadoError,
+} from '../repositories/userRepository';
 import { userService } from '../services/userService';
-import { validarPerfil, validarUsername } from '../validation/usuario';
+import { validarEdicion, validarPerfil, validarUsername } from '../validation/usuario';
 
 export const userRouter = Router();
 
 const ERROR_BD = 'No se pudo conectar con la base de datos. Intenta de nuevo.';
 export const MENSAJE_USERNAME_OCUPADO = 'Ese nombre de usuario ya está en uso. Prueba con otro.';
+export const MENSAJE_CORREO_OCUPADO = 'Ese correo ya está registrado en otra cuenta.';
+const PERFIL_INCOMPLETO = {
+  error: 'Aún no has elegido tu nombre de usuario.',
+  codigo: 'PERFIL_INCOMPLETO',
+};
 
 /** Público: el formulario lo usa para avisar mientras la persona escribe. */
 userRouter.get('/disponible', async (req: Request, res: Response) => {
@@ -33,10 +43,7 @@ userRouter.get('/me', requireAuth, async (_req: Request, res: Response) => {
   try {
     const perfil = await userService.obtenerPerfil(usuario.uid);
     if (!perfil) {
-      res.status(404).json({
-        error: 'Aún no has elegido tu nombre de usuario.',
-        codigo: 'PERFIL_INCOMPLETO',
-      });
+      res.status(404).json(PERFIL_INCOMPLETO);
       return;
     }
     res.status(200).json(perfil);
@@ -71,5 +78,62 @@ userRouter.post('/', requireAuth, async (req: Request, res: Response) => {
       return;
     }
     res.status(503).json({ error: ERROR_BD });
+  }
+});
+
+/**
+ * Privado (US-04): edita el perfil propio. Solo cambia los campos enviados.
+ * 409 si el nombre de usuario o el correo ya los usa otra persona.
+ */
+userRouter.patch('/me', requireAuth, async (req: Request, res: Response) => {
+  const usuario = res.locals.usuario as UsuarioAutenticado;
+  const resultado = validarEdicion(req.body, usuario.proveedor);
+
+  if (!resultado.ok) {
+    res.status(400).json({
+      error: resultado.error ?? 'Revisa los campos marcados.',
+      errores: resultado.errores,
+    });
+    return;
+  }
+
+  try {
+    const perfil = await userService.actualizarPerfil(usuario, resultado.datos);
+    res.status(200).json(perfil);
+  } catch (error) {
+    if (error instanceof UsernameOcupadoError) {
+      res.status(409).json({
+        error: MENSAJE_USERNAME_OCUPADO,
+        errores: { username: MENSAJE_USERNAME_OCUPADO },
+      });
+      return;
+    }
+    if (error instanceof CorreoOcupadoError) {
+      res.status(409).json({
+        error: MENSAJE_CORREO_OCUPADO,
+        errores: { email: MENSAJE_CORREO_OCUPADO },
+      });
+      return;
+    }
+    if (error instanceof PerfilNoEncontradoError) {
+      res.status(404).json(PERFIL_INCOMPLETO);
+      return;
+    }
+    res.status(503).json({ error: ERROR_BD });
+  }
+});
+
+/**
+ * Privado (US-05): elimina la cuenta propia. Borra las salas del usuario y sus mensajes,
+ * el perfil, la reserva del nombre de usuario (queda libre) y la cuenta de Firebase Authentication.
+ */
+userRouter.delete('/me', requireAuth, async (_req: Request, res: Response) => {
+  const usuario = res.locals.usuario as UsuarioAutenticado;
+
+  try {
+    const { salasEliminadas } = await userService.eliminarCuenta(usuario);
+    res.status(200).json({ mensaje: 'Tu cuenta fue eliminada.', salasEliminadas });
+  } catch {
+    res.status(503).json({ error: 'No se pudo eliminar tu cuenta. Intenta de nuevo.' });
   }
 });

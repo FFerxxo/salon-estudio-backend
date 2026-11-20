@@ -80,3 +80,83 @@ export function validarPerfil(body: unknown): ResultadoValidacion {
     },
   };
 }
+
+/** Formato básico de correo (Firebase hace la validación final). */
+export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export interface DatosEdicion {
+  nombres?: string;
+  apellidos?: string;
+  username?: string;
+  email?: string;
+  avatarUrl?: string | null;
+}
+
+export type ResultadoEdicion =
+  | { ok: true; datos: DatosEdicion }
+  | { ok: false; errores: Partial<Record<keyof DatosEdicion, string>>; error?: string };
+
+const CAMPOS_EDITABLES: (keyof DatosEdicion)[] = [
+  'nombres',
+  'apellidos',
+  'username',
+  'email',
+  'avatarUrl',
+];
+
+export function validarEmail(valor: unknown): string | null {
+  if (typeof valor !== 'string' || valor.trim() === '') return 'Escribe tu correo.';
+  if (valor.trim().length > 254 || !EMAIL_REGEX.test(valor.trim())) {
+    return 'Escribe un correo válido, por ejemplo nombre@correo.com.';
+  }
+  return null;
+}
+
+/**
+ * Valida en el servidor los cambios del perfil (PATCH): solo se revisan los campos enviados.
+ * El correo solo se puede cambiar en cuentas creadas con correo y contraseña.
+ */
+export function validarEdicion(body: unknown, proveedor: string): ResultadoEdicion {
+  const entrada = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+  const enviados = CAMPOS_EDITABLES.filter((campo) => entrada[campo] !== undefined);
+
+  if (enviados.length === 0) {
+    return { ok: false, errores: {}, error: 'No enviaste ningún cambio.' };
+  }
+
+  const errores: Partial<Record<keyof DatosEdicion, string>> = {};
+  const datos: DatosEdicion = {};
+
+  if (entrada.nombres !== undefined) {
+    const e = validarNombre(entrada.nombres, 'nombres');
+    if (e) errores.nombres = e;
+    else datos.nombres = (entrada.nombres as string).trim();
+  }
+  if (entrada.apellidos !== undefined) {
+    const e = validarNombre(entrada.apellidos, 'apellidos');
+    if (e) errores.apellidos = e;
+    else datos.apellidos = (entrada.apellidos as string).trim();
+  }
+  if (entrada.username !== undefined) {
+    const e = validarUsername(entrada.username);
+    if (e) errores.username = e;
+    else datos.username = (entrada.username as string).trim();
+  }
+  if (entrada.email !== undefined) {
+    if (proveedor !== 'password') {
+      errores.email = 'Tu cuenta es de Google: el correo se cambia en tu cuenta de Google.';
+    } else {
+      const e = validarEmail(entrada.email);
+      if (e) errores.email = e;
+      else datos.email = (entrada.email as string).trim().toLowerCase();
+    }
+  }
+  if (entrada.avatarUrl !== undefined) {
+    const e = validarAvatar(entrada.avatarUrl);
+    if (e) errores.avatarUrl = e;
+    else datos.avatarUrl = (entrada.avatarUrl as string | null) || null;
+  }
+
+  if (Object.keys(errores).length > 0) return { ok: false, errores };
+  return { ok: true, datos };
+}
