@@ -57,7 +57,7 @@ Para levantar **todo el sistema** (frontend, API y tiempo real) usa el `docker-c
 2. **Health Check Path:** `/health`.
    - Opcional: en *Build Filters* incluir solo `realtime/**`, para no redesplegar cuando solo cambia la API.
 3. Variables de entorno: `FRONTEND_URL` y las tres `FIREBASE_*` (mismos valores que la API).
-4. La URL pública (`https://...onrender.com`) va en Vercel como `VITE_REALTIME_URL`.
+4. La URL pública va en Vercel como `VITE_REALTIME_URL`. En producción es https://salon-estudio-realtime-97xr.onrender.com (salud en `/health`).
 
 ## Conectarse desde el frontend
 

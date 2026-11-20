@@ -2,6 +2,15 @@
 
 API REST en **Node.js + TypeScript + Express** conectada a **Cloud Firestore** (Firebase Admin SDK) y documentada con **Swagger** (`/docs`).
 
+## En producción
+
+- **API:** https://salon-estudio-backend-ndzf.onrender.com (salud en `/api/health`)
+- **Swagger:** https://salon-estudio-backend-ndzf.onrender.com/docs
+- **Tiempo real (Socket.IO):** https://salon-estudio-realtime-97xr.onrender.com (salud en `/health`)
+- **Frontend:** https://salon-estudio-g6.vercel.app
+
+Los servicios de Render en plan gratuito se duermen tras 15 minutos sin uso; la primera llamada puede tardar 30 a 50 segundos.
+
 ## Arquitectura por capas
 
 ```text
