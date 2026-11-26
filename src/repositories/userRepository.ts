@@ -49,6 +49,18 @@ export const userRepository = {
     return snap.exists ? (snap.data() as PerfilUsuario) : null;
   },
 
+  /** Cuenta dueña de un nombre de usuario (sin distinguir mayúsculas), o null si no existe. */
+  async buscarPorUsername(username: string): Promise<{ uid: string; email: string } | null> {
+    const db = getDb();
+    const reserva = await db.collection('usernames').doc(username.toLowerCase()).get();
+    const uid = reserva.data()?.uid;
+    if (!reserva.exists || typeof uid !== 'string') return null;
+
+    const perfil = await db.collection('users').doc(uid).get();
+    if (!perfil.exists) return null;
+    return { uid, email: String((perfil.data() as PerfilUsuario).email ?? '') };
+  },
+
   async usernameDisponible(username: string): Promise<boolean> {
     const snap = await getDb().collection('usernames').doc(username.toLowerCase()).get();
     return !snap.exists;
