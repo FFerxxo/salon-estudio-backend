@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { registrarError } from '../log';
 import { requireAuth, UsuarioAutenticado } from '../middleware/auth';
 import { PerfilNoEncontradoError } from '../repositories/userRepository';
 import { NoEsAnfitrionError, SalaNoEncontradaError, salaService } from '../services/salaService';
@@ -34,6 +35,7 @@ function responderError(res: Response, error: unknown) {
     });
     return;
   }
+  registrarError('salas', error);
   res.status(503).json({ error: ERROR_BD });
 }
 
