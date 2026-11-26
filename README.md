@@ -37,11 +37,12 @@ Variables requeridas:
 - `FIREBASE_PROJECT_ID`: ID del proyecto en Firebase.
 - `FIREBASE_CLIENT_EMAIL`: Correo de la cuenta de servicio de Firebase Admin.
 - `FIREBASE_PRIVATE_KEY`: Llave privada de la cuenta de servicio de Firebase Admin.
+- `FIREBASE_WEB_API_KEY`: Clave web de Firebase (la misma que `VITE_FIREBASE_API_KEY` del frontend). La usa `POST /api/auth/ingresar` para comprobar la contraseña al ingresar con @usuario.
 
 ### Variables por plataforma de despliegue en producción
 
 - **En Render (Web Service Docker):**
-  - Configurar en el panel de variables de entorno: `PORT`, `FRONTEND_URL` (con la URL de Vercel), `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`.
+  - Configurar en el panel de variables de entorno: `PORT`, `FRONTEND_URL` (con la URL de Vercel), `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `FIREBASE_WEB_API_KEY`.
 - **En Render, servicio de tiempo real (otro Web Service Docker del mismo repositorio, Root Directory `realtime`):**
   - `FRONTEND_URL` y las mismas tres `FIREBASE_*`. Health Check Path: `/health`.
 - **En Vercel (Frontend):**
@@ -150,3 +151,18 @@ Todas estas rutas piden `Authorization: Bearer <ID token>`. El usuario siempre s
 **Política de eliminación de cuenta:** se borra todo lo de la persona menos los mensajes que escribió en salas de otras personas, para no romper esas conversaciones. Primero se borra Firestore y al final la cuenta de Firebase Authentication; si algo falla a mitad, se puede repetir sin error.
 
 **Pruebas:** `npm test` corre 77 pruebas (perfil, eliminar cuenta, salas, permisos y Swagger), incluidas pruebas de las transacciones de Firestore con una base en memoria.
+
+## Ingresar con @usuario (Sprint 3 — issue #9)
+
+| Método | Ruta | Acceso | Qué hace |
+|---|---|---|---|
+| POST | `/api/auth/ingresar` | Público | Recibe `{ usuario, contrasena }` (`usuario` con o sin `@`). Si la contraseña es correcta responde `{ token }`, un token personalizado de Firebase; el frontend inicia sesión con `signInWithCustomToken(auth, token)` |
+
+- La respuesta **nunca** incluye el correo de la cuenta.
+- Usuario inexistente, cuenta que solo entra con Google y contraseña incorrecta responden lo mismo: `401 { error: 'Usuario o contraseña incorrectos.' }`.
+- Límite de intentos: 5 fallos con el mismo usuario desde la misma IP bloquean ese usuario en esa IP durante 15 minutos (`429`).
+- Necesita la variable `FIREBASE_WEB_API_KEY` en Render.
+
+## Registro de errores
+
+Los errores inesperados se escriben en los logs de Render como una línea JSON: `{ nivel, servicio, contexto, codigo, tipo, fecha }`. Nunca se registran correos, nombres de usuario, contraseñas ni tokens.

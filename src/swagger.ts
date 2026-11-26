@@ -98,6 +98,76 @@ export const swaggerDocument = {
     },
   },
   paths: {
+    '/api/auth/ingresar': {
+      post: {
+        summary: 'Ingresar con @usuario y contraseña (público, issue #9)',
+        description:
+          'Busca la cuenta por nombre de usuario, comprueba la contraseña con Firebase Authentication y devuelve un token personalizado. ' +
+          'El frontend inicia sesión con `signInWithCustomToken(auth, token)`. La respuesta nunca incluye el correo. ' +
+          'Si el usuario no existe, entró solo con Google o la contraseña es incorrecta, el error es el mismo (401). ' +
+          'Después de 5 intentos fallidos con el mismo usuario desde la misma IP, responde 429 durante 15 minutos.',
+        tags: ['Autenticación (US-02, US-03)'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['usuario', 'contrasena'],
+                properties: {
+                  usuario: { type: 'string', example: '@ana_perez', description: 'Con o sin @ al inicio. No distingue mayúsculas.' },
+                  contrasena: { type: 'string', format: 'password', example: '********' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Contraseña correcta',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { token: { type: 'string', description: 'Token personalizado de Firebase (custom token)' } },
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Falta el usuario o la contraseña',
+            content: {
+              'application/json': {
+                schema: errorSchema,
+                example: { error: 'Escribe tu usuario y tu contraseña.', errores: { contrasena: 'Escribe tu contraseña.' } },
+              },
+            },
+          },
+          '401': {
+            description: 'Usuario inexistente o contraseña incorrecta (mismo mensaje en los dos casos)',
+            content: {
+              'application/json': {
+                schema: errorSchema,
+                example: { error: 'Usuario o contraseña incorrectos.', codigo: 'CREDENCIALES_INVALIDAS' },
+              },
+            },
+          },
+          '429': {
+            description: 'Demasiados intentos fallidos',
+            content: {
+              'application/json': {
+                schema: errorSchema,
+                example: { error: 'Hiciste demasiados intentos. Espera 15 minutos e intenta de nuevo.', codigo: 'DEMASIADOS_INTENTOS' },
+              },
+            },
+          },
+          '503': {
+            description: 'No se pudo comprobar la contraseña en este momento',
+            content: { 'application/json': { schema: errorSchema } },
+          },
+        },
+      },
+    },
     '/api/usuarios/disponible': {
       get: {
         summary: 'Indica si un nombre de usuario está libre (público)',
