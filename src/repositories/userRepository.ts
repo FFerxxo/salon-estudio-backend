@@ -111,7 +111,8 @@ export const userRepository = {
   /**
    * Borra en Firestore todo lo del usuario (US-05):
    * 1. Sus salas (rooms donde es anfitrión) con sus mensajes.
-   * 2. Su perfil (users/{uid}) y la reserva de su nombre de usuario (usernames), en una transacción.
+   * 2. Anonimiza sus mensajes en salas de otras personas («Cuenta eliminada», sin autorUid).
+   * 3. Su perfil (users/{uid}) y la reserva de su nombre de usuario (usernames), en una transacción.
    * Devuelve cuántas salas se borraron. Si no tenía perfil, igual borra lo demás.
    */
   async eliminarDatos(uid: string): Promise<{ salasEliminadas: number }> {
@@ -120,6 +121,22 @@ export const userRepository = {
     const salas = await db.collection('rooms').where('anfitrionUid', '==', uid).get();
     for (const sala of salas.docs) {
       await db.recursiveDelete(sala.ref);
+    }
+
+    const TAMANO_LOTE = 500;
+    const mensajes = await db.collectionGroup('messages').where('autorUid', '==', uid).get();
+    for (let i = 0; i < mensajes.docs.length; i += TAMANO_LOTE) {
+      const lote = db.batch();
+      for (const doc of mensajes.docs.slice(i, i + TAMANO_LOTE)) {
+        const datos = { ...doc.data() };
+        delete datos.autorUid;
+        lote.set(doc.ref, {
+          ...datos,
+          autorUsername: 'Cuenta eliminada',
+          autorEliminado: true,
+        });
+      }
+      await lote.commit();
     }
 
     const userRef = db.collection('users').doc(uid);
