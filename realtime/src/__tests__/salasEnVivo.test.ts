@@ -25,7 +25,7 @@ const USUARIOS: Record<string, { uid: string; username: string }> = {
 
 const pausa = (ms = 120) => new Promise((ok) => setTimeout(ok, ms));
 
-describe('US-07 · Salas en vivo con onSnapshot', () => {
+describe('US-07 y US-10 · Salas en vivo con onSnapshot', () => {
   let url = '';
   let ioServer: Server;
   let presencia: Presencia;
@@ -34,12 +34,16 @@ describe('US-07 · Salas en vivo con onSnapshot', () => {
   let clientes: ClienteSocket[] = [];
   let emitirSnapshot: (cambios: CambioSimulado[]) => void;
   let unsubscribeMock: ReturnType<typeof vi.fn>;
+  let collectionSpy: ReturnType<typeof vi.fn>;
+  let obtenerSalaSpy: ReturnType<typeof vi.spyOn>;
+  let guardarMensajeSpy: ReturnType<typeof vi.spyOn>;
+  let historialSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
     unsubscribeMock = vi.fn();
     let onNext: ((snap: unknown) => void) | null = null;
 
-    const collectionSpy = vi.fn((nombre: string) => {
+    collectionSpy = vi.fn((nombre: string) => {
       if (nombre === 'rooms') {
         return {
           onSnapshot: vi.fn((cb: (snap: unknown) => void) => {
@@ -79,7 +83,7 @@ describe('US-07 · Salas en vivo con onSnapshot', () => {
       return u ? { username: u.username, avatarUrl: null } : null;
     });
 
-    vi.spyOn(salaRepository, 'obtener').mockImplementation(async (id) => {
+    obtenerSalaSpy = vi.spyOn(salaRepository, 'obtener').mockImplementation(async (id) => {
       if (id === 'SALAAAA2') {
         return { id, nombre: 'Sala Cálculo', ambiente: 'ninguno', anfitrionUid: 'uid-ana' };
       }
@@ -87,6 +91,16 @@ describe('US-07 · Salas en vivo con onSnapshot', () => {
         return { id, nombre: 'Sala Física', ambiente: 'blue', anfitrionUid: 'uid-sofi' };
       }
       return null;
+    });
+
+    guardarMensajeSpy = vi.spyOn(salaRepository, 'guardarMensaje').mockImplementation(async (datos) => ({
+      id: 'm-1',
+      ...datos,
+    }));
+
+    historialSpy = vi.spyOn(salaRepository, 'historial').mockResolvedValue({
+      mensajes: [],
+      hayMas: false,
     });
 
     presencia = new Presencia();
@@ -184,6 +198,38 @@ describe('US-07 · Salas en vivo con onSnapshot', () => {
     expect(ioServer.sockets.adapter.rooms.get('SALAAAA2')).toBeUndefined();
     expect(presencia.listar('SALAAAA2')).toEqual([]);
     expect(presencia.listar('SALABBB3')).toHaveLength(1);
+  });
+
+  it('rechaza chat:enviar y chat:historial con SALA_NO_ENCONTRADA tras eliminar la sala sin leer Firestore ni guardar', async () => {
+    const ana = await conectarYUnirse('token-ana', 'SALAAAA2');
+    const luis = await conectarYUnirse('token-luis', 'SALAAAA2');
+
+    emitirSnapshot([{ tipo: 'added', id: 'SALAAAA2', nombre: 'Sala Cálculo' }]);
+    emitirSnapshot([{ tipo: 'removed', id: 'SALAAAA2' }]);
+    await pausa();
+
+    obtenerSalaSpy.mockClear();
+    collectionSpy.mockClear();
+
+    const respEnviarAna = (await ana
+      .timeout(2000)
+      .emitWithAck('chat:enviar', { salaId: 'SALAAAA2', texto: 'Hola?' })) as Respuesta;
+    const respEnviarLuis = (await luis
+      .timeout(2000)
+      .emitWithAck('chat:enviar', { salaId: 'SALAAAA2', texto: '¿Siguen aquí?' })) as Respuesta;
+    const respHistorial = (await ana
+      .timeout(2000)
+      .emitWithAck('chat:historial', { salaId: 'SALAAAA2' })) as Respuesta;
+
+    expect(respEnviarAna).toMatchObject({ ok: false, codigo: 'SALA_NO_ENCONTRADA' });
+    expect(respEnviarAna.error).toBeTruthy();
+    expect(respEnviarLuis).toMatchObject({ ok: false, codigo: 'SALA_NO_ENCONTRADA' });
+    expect(respHistorial).toMatchObject({ ok: false, codigo: 'SALA_NO_ENCONTRADA' });
+
+    expect(guardarMensajeSpy).not.toHaveBeenCalled();
+    expect(historialSpy).not.toHaveBeenCalled();
+    expect(obtenerSalaSpy).not.toHaveBeenCalled();
+    expect(collectionSpy).not.toHaveBeenCalled();
   });
 
   it('desuscribe el listener de Firestore al cerrar el servidor o llamar detener()', async () => {

@@ -33,7 +33,7 @@ Todos responden con *acknowledgement* (`socket.emitWithAck(evento, datos)`):
 | `chat:historial` | `{ salaId, antesDe? }` | `{ mensajes, hayMas }` — 30 por página, del más viejo al más nuevo. Para cargar los anteriores, enviar `antesDe` = `creadoEn` del mensaje más viejo que ya se muestra |
 | `presencia:estado` | `{ salaId, microfono: boolean, camara: boolean }` | `{}` |
 
-Códigos de error: `SALA_NO_ENCONTRADA`, `NO_ESTAS_EN_SALA` (intenta usar una sala a la que no entró), `MENSAJE_VACIO`, `MENSAJE_LARGO`, `DATOS_INVALIDOS`, `ERROR_SERVIDOR`.
+Códigos de error: `SALA_NO_ENCONTRADA` (la sala no existe o fue eliminada mientras estaban conectados; en `chat:enviar` y `chat:historial` se valida en memoria desde el listener de `rooms`, sin leer Firestore en cada mensaje ni guardar mensajes en salas eliminadas), `NO_ESTAS_EN_SALA` (intenta usar una sala a la que no entró), `MENSAJE_VACIO`, `MENSAJE_LARGO`, `DATOS_INVALIDOS`, `ERROR_SERVIDOR`.
 
 ## 3. Del servidor al cliente
 
@@ -83,5 +83,5 @@ Al eliminar una sala o una cuenta, la API borra también los mensajes de esas sa
 
 ## 5. Próximos sprints
 
-- Sprint 3 (US-07, US-10, US-11): avisos en vivo `sala:actualizada` y `sala:eliminada`, junto con el chat (`chat:enviar`, `chat:mensaje`, `chat:historial`).
+- Sprint 3 (US-07, US-10, US-11): avisos en vivo `sala:actualizada` y `sala:eliminada`, y rechazo de `chat:enviar` / `chat:historial` con `SALA_NO_ENCONTRADA` cuando la sala ya no existe.
 - Sprint 4 (TS-03): se agregan los eventos de señalización WebRTC (`webrtc:oferta`, `webrtc:respuesta`, `webrtc:candidato`) usando el `socketId` de cada participante.
