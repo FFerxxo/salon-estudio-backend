@@ -98,7 +98,7 @@ export const swaggerDocument = {
     },
   },
   paths: {
-    '/api/auth/ingresar': {
+    '/api/auth/ingresar-usuario': {
       post: {
         summary: 'Ingresar con @usuario y contraseña (público, issue #9)',
         description:
@@ -113,10 +113,10 @@ export const swaggerDocument = {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['usuario', 'contrasena'],
+                required: ['username', 'password'],
                 properties: {
-                  usuario: { type: 'string', example: '@ana_perez', description: 'Con o sin @ al inicio. No distingue mayúsculas.' },
-                  contrasena: { type: 'string', format: 'password', example: '********' },
+                  username: { type: 'string', example: '@ana_perez', description: 'Con o sin @ al inicio. No distingue mayúsculas.' },
+                  password: { type: 'string', format: 'password', example: '********' },
                 },
               },
             },
@@ -139,7 +139,7 @@ export const swaggerDocument = {
             content: {
               'application/json': {
                 schema: errorSchema,
-                example: { error: 'Escribe tu usuario y tu contraseña.', errores: { contrasena: 'Escribe tu contraseña.' } },
+                example: { error: 'Escribe tu usuario y tu contraseña.', errores: { password: 'Escribe tu contraseña.' } },
               },
             },
           },

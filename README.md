@@ -37,7 +37,7 @@ Variables requeridas:
 - `FIREBASE_PROJECT_ID`: ID del proyecto en Firebase.
 - `FIREBASE_CLIENT_EMAIL`: Correo de la cuenta de servicio de Firebase Admin.
 - `FIREBASE_PRIVATE_KEY`: Llave privada de la cuenta de servicio de Firebase Admin.
-- `FIREBASE_WEB_API_KEY`: Clave web de Firebase (la misma que `VITE_FIREBASE_API_KEY` del frontend). La usa `POST /api/auth/ingresar` para comprobar la contraseña al ingresar con @usuario.
+- `FIREBASE_WEB_API_KEY`: Clave web de Firebase (la misma que `VITE_FIREBASE_API_KEY` del frontend). La usa `POST /api/auth/ingresar-usuario` para comprobar la contraseña al ingresar con @usuario.
 
 ### Variables por plataforma de despliegue en producción
 
@@ -156,7 +156,7 @@ Todas estas rutas piden `Authorization: Bearer <ID token>`. El usuario siempre s
 
 | Método | Ruta | Acceso | Qué hace |
 |---|---|---|---|
-| POST | `/api/auth/ingresar` | Público | Recibe `{ usuario, contrasena }` (`usuario` con o sin `@`). Si la contraseña es correcta responde `{ token }`, un token personalizado de Firebase; el frontend inicia sesión con `signInWithCustomToken(auth, token)` |
+| POST | `/api/auth/ingresar-usuario` | Público | Recibe `{ username, password }` (`username` con o sin `@`). Si la contraseña es correcta responde `{ token }`, un token personalizado de Firebase; el frontend inicia sesión con `signInWithCustomToken(auth, token)` |
 
 - La respuesta **nunca** incluye el correo de la cuenta.
 - Usuario inexistente, cuenta que solo entra con Google y contraseña incorrecta responden lo mismo: `401 { error: 'Usuario o contraseña incorrectos.' }`.

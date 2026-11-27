@@ -20,20 +20,23 @@ function demasiadosIntentos(res: Response, minutos: number) {
 
 /**
  * Público: ingresar con @usuario y contraseña (issue #9).
+ * Recibe { username, password } (también acepta { usuario, contrasena }).
  * Responde un token personalizado de Firebase; el frontend inicia sesión con
  * signInWithCustomToken(auth, token). Nunca devuelve el correo de nadie.
  */
-authRouter.post('/ingresar', async (req: Request, res: Response) => {
+authRouter.post('/ingresar-usuario', async (req: Request, res: Response) => {
   const body = (typeof req.body === 'object' && req.body !== null ? req.body : {}) as Record<string, unknown>;
-  const usuario = typeof body.usuario === 'string' ? body.usuario.trim().replace(/^@/, '') : '';
-  const contrasena = typeof body.contrasena === 'string' ? body.contrasena : '';
+  const usuarioCrudo = body.username ?? body.usuario;
+  const contrasenaCruda = body.password ?? body.contrasena;
+  const usuario = typeof usuarioCrudo === 'string' ? usuarioCrudo.trim().replace(/^@/, '') : '';
+  const contrasena = typeof contrasenaCruda === 'string' ? contrasenaCruda : '';
 
   if (usuario === '' || contrasena === '') {
     res.status(400).json({
       error: 'Escribe tu usuario y tu contraseña.',
       errores: {
-        ...(usuario === '' ? { usuario: 'Escribe tu @usuario.' } : {}),
-        ...(contrasena === '' ? { contrasena: 'Escribe tu contraseña.' } : {}),
+        ...(usuario === '' ? { username: 'Escribe tu @usuario.' } : {}),
+        ...(contrasena === '' ? { password: 'Escribe tu contraseña.' } : {}),
       },
     });
     return;

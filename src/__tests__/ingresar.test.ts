@@ -28,9 +28,9 @@ function cuentasDePrueba() {
 }
 
 const ingresar = (datos: unknown, ip = '10.0.0.1') =>
-  request(app).post('/api/auth/ingresar').set('X-Forwarded-For', ip).send(datos as object);
+  request(app).post('/api/auth/ingresar-usuario').set('X-Forwarded-For', ip).send(datos as object);
 
-describe('Issue #9 · POST /api/auth/ingresar (ingresar con @usuario)', () => {
+describe('Issue #9 · POST /api/auth/ingresar-usuario (ingresar con @usuario)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -44,7 +44,7 @@ describe('Issue #9 · POST /api/auth/ingresar (ingresar con @usuario)', () => {
   });
 
   it('con @usuario y la contraseña correcta devuelve un token y nunca el correo (200)', async () => {
-    const res = await ingresar({ usuario: '@ana_perez', contrasena: CLAVE_ANA });
+    const res = await ingresar({ username: '@ana_perez', password: CLAVE_ANA });
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ token: 'token-de-uid-ana' });
@@ -53,13 +53,13 @@ describe('Issue #9 · POST /api/auth/ingresar (ingresar con @usuario)', () => {
   });
 
   it('acepta el usuario sin @, con espacios y con otras mayúsculas', async () => {
-    const res = await ingresar({ usuario: '  Ana_Perez ', contrasena: CLAVE_ANA });
+    const res = await ingresar({ username: '  Ana_Perez ', password: CLAVE_ANA });
     expect(res.status).toBe(200);
   });
 
   it('contraseña incorrecta y usuario inexistente dan exactamente el mismo error (401)', async () => {
-    const malaClave = await ingresar({ usuario: '@ana_perez', contrasena: 'otra' });
-    const noExiste = await ingresar({ usuario: '@nadie_aqui', contrasena: 'otra' });
+    const malaClave = await ingresar({ username: '@ana_perez', password: 'otra' });
+    const noExiste = await ingresar({ username: '@nadie_aqui', password: 'otra' });
 
     expect(malaClave.status).toBe(401);
     expect(noExiste.status).toBe(401);
@@ -68,44 +68,44 @@ describe('Issue #9 · POST /api/auth/ingresar (ingresar con @usuario)', () => {
   });
 
   it('una cuenta que solo entra con Google responde el mismo 401', async () => {
-    const res = await ingresar({ usuario: 'luis_g', contrasena: 'cualquiera' });
+    const res = await ingresar({ username: 'luis_g', password: 'cualquiera' });
     expect(res.status).toBe(401);
     expect(res.body.error).toBe(MENSAJE_CREDENCIALES);
   });
 
   it('un usuario con formato inválido no consulta la base de datos y da el mismo 401', async () => {
-    const res = await ingresar({ usuario: 'no válido!', contrasena: 'x' });
+    const res = await ingresar({ username: 'no válido!', password: 'x' });
     expect(res.status).toBe(401);
     expect(userRepository.buscarPorUsername).not.toHaveBeenCalled();
   });
 
   it('sin usuario o sin contraseña responde 400 indicando qué falta', async () => {
-    const res = await ingresar({ usuario: '@ana_perez' });
+    const res = await ingresar({ username: '@ana_perez' });
     expect(res.status).toBe(400);
-    expect(res.body.errores).toEqual({ contrasena: 'Escribe tu contraseña.' });
+    expect(res.body.errores).toEqual({ password: 'Escribe tu contraseña.' });
   });
 
   it('después de 5 intentos fallidos bloquea ese usuario en esa IP (429), incluso con la clave correcta', async () => {
     for (let i = 0; i < 5; i++) {
-      expect((await ingresar({ usuario: '@ana_perez', contrasena: 'mal' })).status).toBe(401);
+      expect((await ingresar({ username: '@ana_perez', password: 'mal' })).status).toBe(401);
     }
-    const bloqueado = await ingresar({ usuario: '@ana_perez', contrasena: CLAVE_ANA });
+    const bloqueado = await ingresar({ username: '@ana_perez', password: CLAVE_ANA });
 
     expect(bloqueado.status).toBe(429);
     expect(bloqueado.body.codigo).toBe('DEMASIADOS_INTENTOS');
     // Desde otra IP la persona puede seguir entrando.
-    expect((await ingresar({ usuario: '@ana_perez', contrasena: CLAVE_ANA }, '10.0.0.2')).status).toBe(200);
+    expect((await ingresar({ username: '@ana_perez', password: CLAVE_ANA }, '10.0.0.2')).status).toBe(200);
   });
 
   it('si Firebase bloquea la cuenta por intentos responde 429', async () => {
     vi.mocked(credencialesRepository.verificarContrasena).mockRejectedValueOnce(new FirebaseBloqueoError());
-    const res = await ingresar({ usuario: '@ana_perez', contrasena: CLAVE_ANA });
+    const res = await ingresar({ username: '@ana_perez', password: CLAVE_ANA });
     expect(res.status).toBe(429);
   });
 
   it('sin FIREBASE_WEB_API_KEY responde 503 con un mensaje claro y lo registra en los logs', async () => {
     vi.mocked(credencialesRepository.verificarContrasena).mockRejectedValueOnce(new IngresoNoDisponibleError());
-    const res = await ingresar({ usuario: '@ana_perez', contrasena: CLAVE_ANA });
+    const res = await ingresar({ username: '@ana_perez', password: CLAVE_ANA });
 
     expect(res.status).toBe(503);
     expect(res.body.error).toContain('correo');
@@ -116,7 +116,7 @@ describe('Issue #9 · POST /api/auth/ingresar (ingresar con @usuario)', () => {
     vi.mocked(credencialesRepository.verificarContrasena).mockRejectedValueOnce(
       Object.assign(new Error('network'), { code: 'ECONNRESET' })
     );
-    await ingresar({ usuario: '@ana_perez', contrasena: CLAVE_ANA });
+    await ingresar({ username: '@ana_perez', password: CLAVE_ANA });
 
     const linea = String(vi.mocked(console.error).mock.calls[0][0]);
     expect(linea).toContain('ECONNRESET');
@@ -124,8 +124,13 @@ describe('Issue #9 · POST /api/auth/ingresar (ingresar con @usuario)', () => {
     expect(linea).not.toContain('ana_perez');
   });
 
+  it('también acepta { usuario, contrasena } como nombres de campo', async () => {
+    const res = await ingresar({ usuario: '@ana_perez', contrasena: CLAVE_ANA });
+    expect(res.status).toBe(200);
+  });
+
   it('está documentada en Swagger', () => {
-    expect(swaggerDocument.paths).toHaveProperty('/api/auth/ingresar');
+    expect(swaggerDocument.paths).toHaveProperty('/api/auth/ingresar-usuario');
   });
 });
 
