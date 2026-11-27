@@ -1,6 +1,7 @@
 import type { Server, Socket } from 'socket.io';
 import type { DatosSocket } from '../middleware/socketAuth';
 import { type CambioSala, salaRepository } from '../repositories/salaRepository';
+import { registrarError } from '../log';
 import { Presencia } from './presencia';
 
 export const LARGO_MAXIMO_MENSAJE = 1000;
@@ -96,7 +97,7 @@ export function registrarEventos(io: Server, presencia = new Presencia()): () =>
   };
 
   const detenerEscucha = salaRepository.escucharCambios(aplicarCambiosSalas, (err) => {
-    console.error('Error al escuchar cambios de salas en Firestore:', err);
+    registrarError('escuchar-salas', err);
   });
 
   io.on('connection', (socket: Socket) => {
@@ -155,7 +156,8 @@ export function registrarEventos(io: Server, presencia = new Presencia()): () =>
           esAnfitrion: sala.anfitrionUid === usuario.uid,
           participantes: presencia.listar(salaId),
         });
-      } catch {
+      } catch (error) {
+        registrarError('sala:unirse', error);
         fallo(ack, 'ERROR_SERVIDOR');
       }
     });
@@ -187,7 +189,8 @@ export function registrarEventos(io: Server, presencia = new Presencia()): () =>
         });
         io.to(salaId).emit('chat:mensaje', mensaje);
         ack?.({ ok: true, mensaje });
-      } catch {
+      } catch (error) {
+        registrarError('chat:enviar', error);
         fallo(ack, 'ERROR_SERVIDOR');
       }
     });
@@ -205,7 +208,8 @@ export function registrarEventos(io: Server, presencia = new Presencia()): () =>
       try {
         const pagina = await salaRepository.historial(salaId, MENSAJES_POR_PAGINA, antesDe);
         ack?.({ ok: true, ...pagina });
-      } catch {
+      } catch (error) {
+        registrarError('chat:historial', error);
         fallo(ack, 'ERROR_SERVIDOR');
       }
     });
