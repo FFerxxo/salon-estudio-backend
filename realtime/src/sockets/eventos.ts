@@ -1,6 +1,6 @@
 import type { Server, Socket } from 'socket.io';
 import type { DatosSocket } from '../middleware/socketAuth';
-import { salaRepository } from '../repositories/salaRepository';
+import { type CambioSala, salaRepository } from '../repositories/salaRepository';
 import { Presencia } from './presencia';
 
 export const LARGO_MAXIMO_MENSAJE = 1000;
@@ -39,7 +39,37 @@ function comoAck(valor: unknown): Ack | undefined {
  * así que un evento de una sala solo llega a los sockets que entraron a esa sala.
  * La lista completa de eventos está en docs/EVENTOS.md.
  */
-export function registrarEventos(io: Server, presencia = new Presencia()) {
+export function registrarEventos(io: Server, presencia = new Presencia()): () => void {
+  const salasActivas = new Map<string, { nombre: string }>();
+
+  const aplicarCambiosSalas = (cambios: CambioSala[]) => {
+    for (const cambio of cambios) {
+      if (cambio.tipo === 'added') {
+        salasActivas.set(cambio.salaId, { nombre: cambio.nombre ?? '' });
+      } else if (cambio.tipo === 'modified') {
+        const anterior = salasActivas.get(cambio.salaId);
+        if (cambio.nombre !== undefined) {
+          salasActivas.set(cambio.salaId, { nombre: cambio.nombre });
+          if (anterior && anterior.nombre !== cambio.nombre) {
+            io.to(cambio.salaId).emit('sala:actualizada', {
+              salaId: cambio.salaId,
+              nombre: cambio.nombre,
+            });
+          }
+        }
+      } else if (cambio.tipo === 'removed') {
+        salasActivas.delete(cambio.salaId);
+        io.to(cambio.salaId).emit('sala:eliminada', { salaId: cambio.salaId });
+        io.in(cambio.salaId).socketsLeave(cambio.salaId);
+        presencia.vaciarSala(cambio.salaId);
+      }
+    }
+  };
+
+  const detenerEscucha = salaRepository.escucharCambios(aplicarCambiosSalas, (err) => {
+    console.error('Error al escuchar cambios de salas en Firestore:', err);
+  });
+
   io.on('connection', (socket: Socket) => {
     const { usuario } = socket.data as DatosSocket;
 
@@ -69,6 +99,10 @@ export function registrarEventos(io: Server, presencia = new Presencia()) {
       try {
         const sala = await salaRepository.obtener(salaId);
         if (!sala) return fallo(ack, 'SALA_NO_ENCONTRADA');
+
+        if (!salasActivas.has(salaId)) {
+          salasActivas.set(salaId, { nombre: sala.nombre });
+        }
 
         if (!socket.rooms.has(salaId)) {
           await socket.join(salaId);
@@ -171,4 +205,11 @@ export function registrarEventos(io: Server, presencia = new Presencia()) {
       for (const salaId of presencia.salasDe(socket.id)) salirDe(salaId);
     });
   });
+
+  let detenido = false;
+  return () => {
+    if (detenido) return;
+    detenido = true;
+    detenerEscucha();
+  };
 }

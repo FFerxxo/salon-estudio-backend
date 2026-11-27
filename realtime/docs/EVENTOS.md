@@ -44,6 +44,8 @@ Se envían con `io.to(salaId)`: **solo los reciben los sockets que entraron a es
 | `sala:participantes` | `{ salaId, participantes }` | Cada vez que alguien entra, sale o se desconecta |
 | `sala:participante-entro` | `{ salaId, participante }` | Entró alguien (no le llega al que entró). Útil para el anuncio accesible «Ana entró a la sala» |
 | `sala:participante-salio` | `{ salaId, socketId, uid, username }` | Salió o se desconectó alguien |
+| `sala:actualizada` | `{ salaId, nombre }` | Cambió el nombre de la sala en Firestore |
+| `sala:eliminada` | `{ salaId }` | La sala fue eliminada (desde «Mis salones» o al borrar la cuenta del anfitrión); luego se sacan los sockets de la sala y se limpia la presencia |
 | `chat:mensaje` | `mensaje` | Nuevo mensaje (también le llega al que lo envió) |
 | `presencia:actualizada` | `{ salaId, socketId, uid, microfono, camara }` | Alguien prendió o apagó micrófono o cámara |
 
@@ -81,5 +83,5 @@ Al eliminar una sala o una cuenta, la API borra también los mensajes de esas sa
 
 ## 5. Próximos sprints
 
-- Sprint 3 (US-10, US-11): el frontend usa `chat:enviar`, `chat:mensaje` y `chat:historial` (ya listos).
+- Sprint 3 (US-07, US-10, US-11): avisos en vivo `sala:actualizada` y `sala:eliminada`, junto con el chat (`chat:enviar`, `chat:mensaje`, `chat:historial`).
 - Sprint 4 (TS-03): se agregan los eventos de señalización WebRTC (`webrtc:oferta`, `webrtc:respuesta`, `webrtc:candidato`) usando el `socketId` de cada participante.
