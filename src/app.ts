@@ -2,6 +2,7 @@ import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
 import { apiRouter } from './routes/apiRoutes';
+import { authRouter } from './routes/authRoutes';
 import { salaRouter } from './routes/salaRoutes';
 import { userRouter } from './routes/userRoutes';
 import { swaggerDocument } from './swagger';
@@ -19,6 +20,7 @@ export function createApp() {
   app.use(express.json());
 
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+  app.use('/api/auth', authRouter);
   app.use('/api/usuarios', userRouter);
   app.use('/api/salas', salaRouter);
   app.use('/api', apiRouter);
