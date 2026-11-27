@@ -46,4 +46,9 @@ export class Presencia {
   salasDe(socketId: string): string[] {
     return [...this.salas.entries()].filter(([, s]) => s.has(socketId)).map(([id]) => id);
   }
+
+  /** Limpia toda la presencia de una sala cuando se elimina en Firestore. */
+  vaciarSala(salaId: string) {
+    this.salas.delete(salaId);
+  }
 }

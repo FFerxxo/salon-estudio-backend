@@ -23,7 +23,8 @@ export function crearServidor(presencia = new Presencia()) {
   });
 
   io.use(autenticarSocket);
-  registrarEventos(io, presencia);
+  const detener = registrarEventos(io, presencia);
+  httpServer.on('close', detener);
 
-  return { httpServer, io };
+  return { httpServer, io, detener };
 }

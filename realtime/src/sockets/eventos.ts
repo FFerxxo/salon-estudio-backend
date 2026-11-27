@@ -1,6 +1,6 @@
 import type { Server, Socket } from 'socket.io';
 import type { DatosSocket } from '../middleware/socketAuth';
-import { salaRepository } from '../repositories/salaRepository';
+import { type CambioSala, salaRepository } from '../repositories/salaRepository';
 import { Presencia } from './presencia';
 
 export const LARGO_MAXIMO_MENSAJE = 1000;
@@ -39,7 +39,66 @@ function comoAck(valor: unknown): Ack | undefined {
  * así que un evento de una sala solo llega a los sockets que entraron a esa sala.
  * La lista completa de eventos está en docs/EVENTOS.md.
  */
-export function registrarEventos(io: Server, presencia = new Presencia()) {
+export function registrarEventos(io: Server, presencia = new Presencia()): () => void {
+  const salasActivas = new Map<string, { nombre: string }>();
+  const salasEliminadas = new Set<string>();
+  let snapshotInicialRecibido = false;
+
+  const salaNoExisteEnMemoria = (salaId: string) =>
+    salasEliminadas.has(salaId) || (snapshotInicialRecibido && !salasActivas.has(salaId));
+
+  const validarSalaParaChat = (
+    socket: Socket,
+    datos: unknown,
+    ack: Ack | undefined
+  ): string | null => {
+    const salaId = leerSalaId(datos);
+    if (!salaId) {
+      fallo(ack, 'NO_ESTAS_EN_SALA');
+      return null;
+    }
+    if (salaNoExisteEnMemoria(salaId)) {
+      fallo(ack, 'SALA_NO_ENCONTRADA');
+      return null;
+    }
+    if (!socket.rooms.has(salaId)) {
+      fallo(ack, 'NO_ESTAS_EN_SALA');
+      return null;
+    }
+    return salaId;
+  };
+
+  const aplicarCambiosSalas = (cambios: CambioSala[]) => {
+    snapshotInicialRecibido = true;
+    for (const cambio of cambios) {
+      if (cambio.tipo === 'added') {
+        salasActivas.set(cambio.salaId, { nombre: cambio.nombre ?? '' });
+        salasEliminadas.delete(cambio.salaId);
+      } else if (cambio.tipo === 'modified') {
+        const anterior = salasActivas.get(cambio.salaId);
+        if (cambio.nombre !== undefined) {
+          salasActivas.set(cambio.salaId, { nombre: cambio.nombre });
+          if (anterior && anterior.nombre !== cambio.nombre) {
+            io.to(cambio.salaId).emit('sala:actualizada', {
+              salaId: cambio.salaId,
+              nombre: cambio.nombre,
+            });
+          }
+        }
+      } else if (cambio.tipo === 'removed') {
+        salasActivas.delete(cambio.salaId);
+        salasEliminadas.add(cambio.salaId);
+        io.to(cambio.salaId).emit('sala:eliminada', { salaId: cambio.salaId });
+        io.in(cambio.salaId).socketsLeave(cambio.salaId);
+        presencia.vaciarSala(cambio.salaId);
+      }
+    }
+  };
+
+  const detenerEscucha = salaRepository.escucharCambios(aplicarCambiosSalas, (err) => {
+    console.error('Error al escuchar cambios de salas en Firestore:', err);
+  });
+
   io.on('connection', (socket: Socket) => {
     const { usuario } = socket.data as DatosSocket;
 
@@ -69,6 +128,11 @@ export function registrarEventos(io: Server, presencia = new Presencia()) {
       try {
         const sala = await salaRepository.obtener(salaId);
         if (!sala) return fallo(ack, 'SALA_NO_ENCONTRADA');
+
+        if (!salasActivas.has(salaId)) {
+          salasActivas.set(salaId, { nombre: sala.nombre });
+        }
+        salasEliminadas.delete(salaId);
 
         if (!socket.rooms.has(salaId)) {
           await socket.join(salaId);
@@ -106,8 +170,8 @@ export function registrarEventos(io: Server, presencia = new Presencia()) {
 
     socket.on('chat:enviar', async (datos: unknown, callback: unknown) => {
       const ack = comoAck(callback);
-      const salaId = leerSalaId(datos);
-      if (!salaId || !socket.rooms.has(salaId)) return fallo(ack, 'NO_ESTAS_EN_SALA');
+      const salaId = validarSalaParaChat(socket, datos, ack);
+      if (!salaId) return;
 
       const texto = (datos as { texto?: unknown }).texto;
       if (typeof texto !== 'string' || texto.trim() === '') return fallo(ack, 'MENSAJE_VACIO');
@@ -130,8 +194,8 @@ export function registrarEventos(io: Server, presencia = new Presencia()) {
 
     socket.on('chat:historial', async (datos: unknown, callback: unknown) => {
       const ack = comoAck(callback);
-      const salaId = leerSalaId(datos);
-      if (!salaId || !socket.rooms.has(salaId)) return fallo(ack, 'NO_ESTAS_EN_SALA');
+      const salaId = validarSalaParaChat(socket, datos, ack);
+      if (!salaId) return;
 
       const antesDe = (datos as { antesDe?: unknown }).antesDe;
       if (antesDe !== undefined && (typeof antesDe !== 'string' || isNaN(Date.parse(antesDe)))) {
@@ -171,4 +235,11 @@ export function registrarEventos(io: Server, presencia = new Presencia()) {
       for (const salaId of presencia.salasDe(socket.id)) salirDe(salaId);
     });
   });
+
+  let detenido = false;
+  return () => {
+    if (detenido) return;
+    detenido = true;
+    detenerEscucha();
+  };
 }
