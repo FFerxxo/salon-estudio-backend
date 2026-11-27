@@ -84,4 +84,84 @@ describe('US-05 · userRepository.eliminarDatos', () => {
       salasEliminadas: 0,
     });
   });
+
+  it('anonimiza los mensajes de A en salas de B sin tocar los mensajes de B ni la sala de B', async () => {
+    fake.db.datos.set('rooms/SALA0001/messages/m-propio', {
+      texto: 'mi sala',
+      autorUid: 'uid-ana',
+      autorUsername: 'ana_perez',
+      creadoEn: '2026-11-20T10:00:00.000Z',
+    });
+    fake.db.datos.set('rooms/SALA0002/messages/m-ana', {
+      texto: 'hola Luis',
+      autorUid: 'uid-ana',
+      autorUsername: 'ana_perez',
+      creadoEn: '2026-11-20T10:05:00.000Z',
+    });
+    fake.db.datos.set('rooms/SALA0002/messages/m-luis', {
+      texto: 'hola Ana',
+      autorUid: 'uid-luis',
+      autorUsername: 'luis_g',
+      creadoEn: '2026-11-20T10:06:00.000Z',
+    });
+
+    await userRepository.eliminarDatos('uid-ana');
+
+    expect(fake.db.datos.has('rooms/SALA0001')).toBe(false);
+    expect(fake.db.datos.has('rooms/SALA0001/messages/m-propio')).toBe(false);
+
+    const msgAnaEnB = fake.db.datos.get('rooms/SALA0002/messages/m-ana');
+    expect(msgAnaEnB).toBeDefined();
+    expect(msgAnaEnB).toEqual({
+      texto: 'hola Luis',
+      autorUsername: 'Cuenta eliminada',
+      autorEliminado: true,
+      creadoEn: '2026-11-20T10:05:00.000Z',
+    });
+    expect('autorUid' in (msgAnaEnB as Record<string, unknown>)).toBe(false);
+
+    expect(fake.db.datos.get('rooms/SALA0002/messages/m-luis')).toEqual({
+      texto: 'hola Ana',
+      autorUid: 'uid-luis',
+      autorUsername: 'luis_g',
+      creadoEn: '2026-11-20T10:06:00.000Z',
+    });
+  });
+
+  it('anonimiza más de 500 mensajes en lotes de hasta 500 y tolera reintento', async () => {
+    for (let i = 0; i < 505; i++) {
+      fake.db.datos.set(`rooms/SALA0002/messages/m-${i}`, {
+        texto: `msg ${i}`,
+        autorUid: 'uid-ana',
+        autorUsername: 'ana_perez',
+        creadoEn: '2026-11-20T10:00:00.000Z',
+      });
+    }
+    const batchSpy = vi.spyOn(fake.db, 'batch');
+
+    await userRepository.eliminarDatos('uid-ana');
+
+    expect(batchSpy).toHaveBeenCalledTimes(2);
+    for (let i = 0; i < 505; i++) {
+      const msg = fake.db.datos.get(`rooms/SALA0002/messages/m-${i}`) as Record<string, unknown>;
+      expect(msg.autorUsername).toBe('Cuenta eliminada');
+      expect(msg.autorEliminado).toBe(true);
+      expect('autorUid' in msg).toBe(false);
+    }
+
+    // Reintento idempotente
+    await expect(userRepository.eliminarDatos('uid-ana')).resolves.toEqual({
+      salasEliminadas: 0,
+    });
+  });
+
+  it('si falla la anonimización no libera todavía el username ni borra el perfil', async () => {
+    vi.spyOn(fake.db, 'collectionGroup').mockImplementationOnce(() => {
+      throw new Error('index missing');
+    });
+
+    await expect(userRepository.eliminarDatos('uid-ana')).rejects.toThrow('index missing');
+    expect(fake.db.datos.has('users/uid-ana')).toBe(true);
+    expect(fake.db.datos.has('usernames/ana_perez')).toBe(true);
+  });
 });
