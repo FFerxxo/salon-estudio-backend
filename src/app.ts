@@ -9,6 +9,8 @@ import { swaggerDocument } from './swagger';
 
 export function createApp() {
   const app = express();
+  // Render reenvía el tráfico detrás de un único proxy inverso
+  app.set('trust proxy', 1);
 
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   app.use(

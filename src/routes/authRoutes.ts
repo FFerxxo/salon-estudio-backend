@@ -1,12 +1,17 @@
 import { Router, Request, Response } from 'express';
 import { rateLimitIngresoUsuario } from '../middleware/rateLimit';
-import { CredencialesInvalidasError } from '../repositories/authRepository';
+import {
+  CredencialesInvalidasError,
+  DemasiadosIntentosError,
+} from '../repositories/authRepository';
 import { authService } from '../services/authService';
 import { validarIngresoUsuario } from '../validation/auth';
 
 export const authRouter = Router();
 
 export const MENSAJE_CREDENCIALES_INVALIDAS = 'Usuario o contraseña incorrectos.';
+const MENSAJE_DEMASIADOS_INTENTOS_FIREBASE =
+  'Demasiados intentos. Espera unos minutos e intenta de nuevo.';
 const MENSAJE_AUTH_NO_DISPONIBLE = 'No se pudo iniciar sesión en este momento. Intenta de nuevo.';
 
 /**
@@ -29,6 +34,10 @@ authRouter.post('/ingresar-usuario', rateLimitIngresoUsuario, async (req: Reques
   } catch (error) {
     if (error instanceof CredencialesInvalidasError) {
       res.status(401).json({ error: MENSAJE_CREDENCIALES_INVALIDAS });
+      return;
+    }
+    if (error instanceof DemasiadosIntentosError) {
+      res.status(429).json({ error: MENSAJE_DEMASIADOS_INTENTOS_FIREBASE });
       return;
     }
     res.status(503).json({ error: MENSAJE_AUTH_NO_DISPONIBLE });

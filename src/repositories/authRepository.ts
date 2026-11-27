@@ -1,4 +1,6 @@
 import { getAuth, getDb } from '../config/firebase';
+import { normalizarUsernameIngreso } from '../validation/auth';
+import { USERNAME_REGEX } from '../validation/usuario';
 
 export class CorreoOcupadoError extends Error {
   constructor() {
@@ -15,6 +17,12 @@ export class CredencialesInvalidasError extends Error {
 export class ServicioAuthNoDisponibleError extends Error {
   constructor() {
     super('Authentication service unavailable');
+  }
+}
+
+export class DemasiadosIntentosError extends Error {
+  constructor() {
+    super('Too many attempts');
   }
 }
 
@@ -53,8 +61,8 @@ function codigoErrorRest(cuerpo: unknown): string {
 export const authRepository = {
   /** Busca el correo y proveedor en el servidor a partir del nombre de usuario (US-02). */
   async buscarCuentaPorUsername(username: string): Promise<CuentaIngreso | null> {
-    const limpio = username.trim().toLowerCase();
-    if (!limpio || limpio.includes('/')) return null;
+    const limpio = normalizarUsernameIngreso(username);
+    if (!USERNAME_REGEX.test(limpio)) return null;
 
     const db = getDb();
     const usernameSnap = await db.collection('usernames').doc(limpio).get();
@@ -97,6 +105,9 @@ export const authRepository = {
 
     const cuerpo = await respuesta.json().catch(() => null);
     const codigo = codigoErrorRest(cuerpo);
+    if (codigo.startsWith('TOO_MANY_ATTEMPTS_TRY_LATER')) {
+      throw new DemasiadosIntentosError();
+    }
     if (CODIGOS_CREDENCIALES_INVALIDAS.has(codigo)) {
       throw new CredencialesInvalidasError();
     }
