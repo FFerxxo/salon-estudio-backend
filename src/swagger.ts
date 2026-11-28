@@ -98,6 +98,85 @@ export const swaggerDocument = {
     },
   },
   paths: {
+    '/api/auth/ingresar-usuario': {
+      post: {
+        summary: 'Inicia sesión con nombre de usuario y contraseña (US-02)',
+        description:
+          'Acepta el nombre de usuario (con o sin `@` al inicio) y la contraseña. ' +
+          'Resuelve el correo únicamente en el servidor, valida las credenciales contra Firebase Auth y ' +
+          'devuelve un customToken para iniciar sesión en el frontend con signInWithCustomToken. ' +
+          'Ninguna respuesta incluye el correo electrónico.',
+        tags: ['Autenticación (US-02)'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['username', 'password'],
+                properties: {
+                  username: { type: 'string', example: '@ana_perez' },
+                  password: { type: 'string', format: 'password', example: 'MiClaveSegura123' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Credenciales válidas: devuelve el customToken para Firebase Auth',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    customToken: { type: 'string', example: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...' },
+                  },
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Faltan campos o tienen formato inválido',
+            content: {
+              'application/json': {
+                example: {
+                  error: 'Revisa los campos marcados.',
+                  errores: { username: 'Escribe tu nombre de usuario.' },
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Usuario inexistente, cuenta sin contraseña o contraseña incorrecta (mensaje único)',
+            content: {
+              'application/json': {
+                schema: errorSchema,
+                example: { error: 'Usuario o contraseña incorrectos.' },
+              },
+            },
+          },
+          '429': {
+            description: 'Demasiados intentos desde la misma IP (incluye encabezado Retry-After)',
+            content: {
+              'application/json': {
+                schema: errorSchema,
+                example: { error: 'Demasiados intentos. Espera unos minutos antes de volver a intentar.' },
+              },
+            },
+          },
+          '503': {
+            description: 'Servicio de autenticación no disponible o falta configuración en el servidor',
+            content: {
+              'application/json': {
+                schema: errorSchema,
+                example: { error: 'No se pudo iniciar sesión en este momento. Intenta de nuevo.' },
+              },
+            },
+          },
+        },
+      },
+    },
     '/api/usuarios/disponible': {
       get: {
         summary: 'Indica si un nombre de usuario está libre (público)',
