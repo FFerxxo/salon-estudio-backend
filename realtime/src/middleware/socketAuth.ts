@@ -1,5 +1,6 @@
 import type { Socket } from 'socket.io';
 import { getAuth } from '../config/firebase';
+import { registrarError } from '../log';
 import { perfilRepository } from '../repositories/perfilRepository';
 
 export interface UsuarioSocket {
@@ -61,7 +62,8 @@ export async function autenticarSocket(socket: Socket, next: (err?: Error) => vo
       avatarUrl: perfil.avatarUrl,
     };
     next();
-  } catch {
+  } catch (error) {
+    registrarError('handshake', error);
     next(errorConexion('ERROR_SERVIDOR', 'No pudimos conectarte. Intenta de nuevo.'));
   }
 }

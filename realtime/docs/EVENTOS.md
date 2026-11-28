@@ -64,10 +64,11 @@ interface Participante {
 interface Mensaje {
   id: string;
   salaId: string;
-  autorUid: string;
-  autorUsername: string;
+  autorUid?: string;          // no viene si el autor eliminó su cuenta
+  autorUsername: string;      // «Cuenta eliminada» si el autor eliminó su cuenta
+  autorEliminado?: boolean;   // true si el autor eliminó su cuenta (US-05)
   texto: string;
-  creadoEn: string;   // ISO 8601
+  creadoEn: string;           // ISO 8601
 }
 ```
 
@@ -76,12 +77,30 @@ interface Mensaje {
 | Ruta | Quién escribe | Campos |
 |---|---|---|
 | `rooms/{salaId}` | API (`POST /api/salas`) | `nombre`, `ambiente` (`ninguno`/`blue`/`green`), `anfitrionUid`, `anfitrionUsername`, `creadaEn`, `actualizadaEn?` |
-| `rooms/{salaId}/messages/{id}` | Servidor de tiempo real (`chat:enviar`) | `autorUid`, `autorUsername`, `texto`, `creadoEn` |
+| `rooms/{salaId}/messages/{id}` | Servidor de tiempo real (`chat:enviar`) | `autorUid`, `autorUsername`, `texto`, `creadoEn`. Si el autor eliminó su cuenta: `autorUsername` = «Cuenta eliminada», `autorEliminado: true` y sin `autorUid` |
 | `users/{uid}`, `usernames/{username}` | API | Perfiles (Sprint 1) |
 
-Al eliminar una sala o una cuenta, la API borra también los mensajes de esas salas.
+Al eliminar una sala o una cuenta, la API borra también los mensajes de esas salas. Los mensajes que la persona escribió en salas de otros se conservan como «Cuenta eliminada» (US-05).
 
-## 5. Próximos sprints
+## 5. Resumen: quién recibe cada evento del servidor
+
+| Evento | Lo recibe |
+|---|---|
+| `chat:mensaje` | Todos los de la sala, incluido quien lo envió |
+| `sala:participantes` | Todos los de la sala |
+| `sala:participante-entro` | Todos los de la sala menos quien entró |
+| `sala:participante-salio` | Los que siguen en la sala |
+| `sala:actualizada` | Todos los de la sala |
+| `sala:eliminada` | Todos los de la sala; después el servidor los saca de ella |
+| `presencia:actualizada` | Todos los de la sala |
+
+Ningún evento sale con `io.emit` a todo el servidor: todos usan `io.to(salaId)`.
+
+## 6. Registro de errores
+
+Los errores del servidor de tiempo real y de la API se escriben en los logs de Render como una línea JSON: `{ nivel, servicio, contexto, codigo, tipo, fecha }`. `contexto` dice dónde pasó (`sala:unirse`, `chat:enviar`, `chat:historial`, `handshake`, `escuchar-salas`). Nunca se registran correos, nombres de usuario, textos de mensajes ni tokens.
+
+## 7. Próximos sprints
 
 - Sprint 3 (US-07, US-10, US-11): avisos en vivo `sala:actualizada` y `sala:eliminada`, y rechazo de `chat:enviar` / `chat:historial` con `SALA_NO_ENCONTRADA` cuando la sala ya no existe.
 - Sprint 4 (TS-03): se agregan los eventos de señalización WebRTC (`webrtc:oferta`, `webrtc:respuesta`, `webrtc:candidato`) usando el `socketId` de cada participante.
